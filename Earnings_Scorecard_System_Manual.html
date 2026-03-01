@@ -390,33 +390,40 @@ code {
     <div class="flow-step">
       <div class="flow-num">2</div>
       <div class="flow-content">
-        <strong>QoQ株価変動率の計算</strong>
-        現在株価 ÷ 前回決算日終値 - 1 = QoQ変動率。この値がバリュエーション補正（Tier 0）の入力になる。例: $129 ÷ $147.76 = -12.7%
+        <strong>Yahoo Finance Analysis — コンセンサス最新値取得</strong>
+        Yahoo Finance の Analysis ページから最新の EPS Estimate / Revenue Estimate を取得。T-90d 初期値（EPS $0.28 / Rev $1.54B）との差分を Consensus Drift として自動計算。株価急騰・急落時にはアナリストの予想修正が入ることが多く、毎回取得することでドリフトの動きをリアルタイムに捕捉する。
       </div>
     </div>
     <div class="flow-step">
       <div class="flow-num">3</div>
       <div class="flow-content">
-        <strong>スコア計算</strong>
-        Tier 2（トレンド）+ Tier 3（品質）は前回決算で確定済みの値を使用。補正①（バリュエーション）と補正②（マクロF&G）を最新データで再計算。Tier 1は決算発表まで「待ち」。
+        <strong>QoQ株価変動率の計算</strong>
+        現在株価 ÷ 前回決算日終値 - 1 = QoQ変動率。この値がバリュエーション補正（Tier 0）の入力になる。例: $129 ÷ $147.76 = -12.7%
       </div>
     </div>
     <div class="flow-step">
       <div class="flow-num">4</div>
+      <div class="flow-content">
+        <strong>スコア計算</strong>
+        Tier 2（トレンド）+ Tier 3（品質）は前回決算で確定済みの値を使用。補正①（バリュエーション）と補正②（マクロF&G）を最新データで再計算。Consensus Driftも最新値で更新。Tier 1のEPS/Rev Beat%のみ決算発表まで「待ち」。
+      </div>
+    </div>
+    <div class="flow-step">
+      <div class="flow-num">5</div>
       <div class="flow-content">
         <strong>バリュエーション判定</strong>
         現在株価とBase理論株価（$147）の乖離率から、「割安〜大幅割高」の5段階ゾーンを判定。
       </div>
     </div>
     <div class="flow-step">
-      <div class="flow-num">5</div>
+      <div class="flow-num">6</div>
       <div class="flow-content">
         <strong>ダッシュボード生成（3形式同時出力）</strong>
         JSX（Reactコンポーネント）、HTML（自己完結型）、PNG（Playwrightスクリーンショット）を同時生成。データは全てハードコードされ、外部API不要で表示可能。
       </div>
     </div>
     <div class="flow-step">
-      <div class="flow-num">6</div>
+      <div class="flow-num">7</div>
       <div class="flow-content">
         <strong>バージョニング＆出力</strong>
         パッチバージョン+1、Changelog記録。ファイル名: <code>PLTR_LiveSignal_vX.X.X_YYYYMMDD</code>。変更内容サマリーを添えてユーザーに納品。
@@ -514,7 +521,7 @@ Total Score = Tier1 (40pt) + Tier2 (35pt) + Tier3 (25pt) + 補正① (±15pt) + 
     <tr>
       <td class="bold">Consensus Drift</td>
       <td class="mono">10pt</td>
-      <td>決算前90日のコンセンサス変化方向<br>上方修正 → 加点、下方修正 → 減点</td>
+      <td>シグナル生成時にYahoo Finance Analysisから最新Estimateを自動取得し、T-90d初期値との乖離率を算出。上方修正 → 加点、下方修正 → 減点</td>
     </tr>
   </table>
 
@@ -663,6 +670,31 @@ Fair Value = (Σ FCF_t / (1+WACC)^t + Terminal Value) / 発行株式数 + Cash p
   </table>
 
   <h3>バリュエーション・ゾーン判定</h3>
+
+  <div class="card card-blue">
+    <strong class="bold">毎回更新されるもの vs 四半期でのみ更新されるもの</strong><br><br>
+    理論株価（Bear $85 / Base $147 / Bull $263）は<strong class="accent">四半期決算ごとに更新</strong>されます。DCFモデルの入力値（ガイダンスFCF、成長率前提、Cash、発行株式数）が決算発表で変わるまでは固定です。<br><br>
+    一方、「PLTRシグナル」を実行するたびに<strong class="green">毎回更新される</strong>のは以下です:
+    <table style="margin-top:12px">
+      <tr><th>毎回更新（リアルタイム）</th><th>四半期決算で更新</th></tr>
+      <tr>
+        <td>
+          現在株価 → QoQ変動率<br>
+          F&G Index → マクロ補正<br>
+          コンセンサス（EPS/Rev Est.）→ Drift<br>
+          乖離率（株価 vs Base）→ ゾーン判定
+        </td>
+        <td>
+          FY Guided FCF（DCF入力）<br>
+          Phase成長率前提（必要時に見直し）<br>
+          Terminal Multiple（同上）<br>
+          Cash / 発行株式数（BS更新）<br>
+          <span class="accent">→ 理論株価が再計算される</span>
+        </td>
+      </tr>
+    </table>
+    <span style="color:var(--text2);font-size:13px">つまり、シグナルを途中で見た場合は「固定のBase $147に対して、今の株価がどこにいるか」が動く形です。決算間でBase前提を見直したい場合は、Claudeに依頼すればモデルを再計算できます。</span>
+  </div>
   <table>
     <tr><th>Base乖離</th><th>ゾーン</th><th>色</th></tr>
     <tr><td class="mono">&gt; +50%</td><td>大幅割高</td><td><span class="tag tag-red">赤</span></td></tr>
@@ -859,7 +891,7 @@ Y = 翌営業日始値 ÷ 決算日終値 - 1
       <div class="flow-num">5</div>
       <div class="flow-content">
         <strong>ダッシュボード生成</strong>
-        Claudeに「[ティッカー]シグナル」→ 自動的にデータ差し替え版を生成 → GitHub Pagesで公開。
+        Claudeに「[ティッカー]シグナル」→ 株価・F&G・Yahoo Financeコンセンサスを自動取得し、データ差し替え版を生成 → GitHub Pagesで公開。
       </div>
     </div>
   </div>
